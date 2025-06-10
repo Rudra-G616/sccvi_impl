@@ -24,9 +24,9 @@ from scvi.model._utils import _init_library_size
 from scvi.model.base import BaseModelClass
 from scvi.distributions import ZeroInflatedNegativeBinomial
 
-from src.sccvi_impl.model.base.training_mixin import scCausalVITrainingMixin
-from src.sccvi_impl.module.scCausalVI import scCausalVIModule
-from src.sccvi_impl.model.base._utils import _invert_dict
+from .base.training_mixin import scCausalVITrainingMixin
+from ..module.scCausalVI import scCausalVIModule
+from .base._utils import _invert_dict
 
 logger = logging.getLogger(__name__)
 

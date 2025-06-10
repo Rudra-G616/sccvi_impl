@@ -2,7 +2,7 @@ from typing import List, Optional, Union, Tuple, Dict
 import numpy as np
 import torch
 from scvi.train import TrainingPlan, TrainRunner
-from src.sccvi_impl.data.dataloaders.data_splitting import scCausalVIDataSplitter
+from ...data.dataloaders.data_splitting import scCausalVIDataSplitter
 
 
 class scCausalVITrainingMixin:
