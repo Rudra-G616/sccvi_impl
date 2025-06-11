@@ -7,8 +7,8 @@ This module provides tools to benchmark `scCausalVI` and `Model1` on various sin
 - Download and prepare single-cell datasets for causal inference evaluation
 - Train both `scCausalVI` and `Model1` on each dataset with configurable parameters
 - Calculate and compare key metrics:
-  - Correlation: E[z_bg*e_tilda] - E[z_bg]*E[e_tilda]
-  - Average silhouette score on z_bg
+  - Correlation: $E[z_{bg} \times \tilde{e}] - (E[z_{bg}] \times E[\tilde{e}])$
+  - Average silhouette score on $z_{bg}$
   - L2 norm reconstruction error
 - Visualize results through an interactive Streamlit dashboard with comparative charts
 - Support for both local and cloud-based benchmarking
@@ -48,11 +48,13 @@ Command-line arguments:
 ```
 --output_dir OUTPUT_DIR   Directory to save results (default: data)
 --dataset DATASET         Dataset to benchmark (default: all)
---max_epochs MAX_EPOCHS   Maximum training epochs (default: 50)
---batch_size BATCH_SIZE   Training batch size (default: 256)
---learning_rate LR        Learning rate (default: 0.001)
---use_gpu                 Use GPU for training if available
+--n_latent N_LATENT       Dimension of latent space (default: 15)
+--max_epochs MAX_EPOCHS   Maximum training epochs (default: 100)
+--batch_size BATCH_SIZE   Training batch size (default: 128)
+--use-gpu                 Use GPU for training if available
 ```
+
+Note: The code now supports GPU acceleration through the `--use-gpu` command-line argument. When enabled, training will use GPU if available.
 
 ### Running the Dashboard
 
@@ -66,22 +68,23 @@ The dashboard will be available at http://localhost:8501 by default.
 
 You can customize the dashboard with these options:
 ```
---port PORT               Port to run the dashboard on (default: 8501)
---browser                 Open dashboard in browser automatically
+--results-dir RESULTS_DIR  Directory containing benchmark results (default: data/benchmarking_results)
+--port PORT                Port to run the dashboard on (default: 8501)
+--browser                  Open dashboard in browser automatically
+--force                    Start the dashboard even if no results exist
 ```
 
 ## Metrics Explanation
 
-1. **Correlation between z_bg and e_tilda**
+1. **Correlation between $z_{bg}$ and $\tilde{e}$**
    - Measures correlation/dependence between background and treatment effect latent variables
-   - Computed as: E[z_bg*e_tilda] - E[z_bg]*E[e_tilda] (covariance)
-   - Values closer to zero indicate better disentanglement (independence)
+   - Computed as: $E[z_{bg}\tilde{e}] - E[z_{bg}]E[\tilde{e}]$ (covariance)
+   - Values closer to zero indicate better disentanglement (orthogonality)
    - This metric evaluates how well the model separates background and treatment effects
 
-2. **Average Silhouette Score on z_bg**
+2. **Average Silhouette Score on $z_{bg}$**
    - Measures how well cells from different conditions are separated in the background latent space
-   - Range: [-1, 1], higher values indicate better condition-invariant representation
-   - Good background representations should show similar values regardless of treatment condition
+   - Good background representations should show similar values regardless of treatment condition (i.e. SUTVA (Stable Unit Treatment Value Assumption) is valid. Hence we expect the ASW to be close to zero)
 
 3. **L2 Reconstruction Error**
    - Measures how well the model reconstructs the original data
@@ -91,12 +94,12 @@ You can customize the dashboard with these options:
 ## Dataset Information
 
 The benchmarking uses the following datasets:
-- **simulated**: Simulated dataset with known ground truth effects
-- **ifn_beta**: Interferon beta treatment on immune cells
-- **covid_epithelial**: COVID-19 epithelial cells with infected and uninfected conditions
-- **covid_pbmc**: COVID-19 peripheral blood mononuclear cells (PBMCs) from patients and controls
-- **pbmc_batch_effect**: PBMCs with batch effects to test batch correction capabilities
-- **pbmc_negative_control**: PBMCs with negative control for method validation
+- **simulated** 
+- **ifn_beta**
+- **covid_epithelial**
+- **covid_pbmc**
+- **pbmc_batch_effect**
+- **pbmc_negative_control**
 
 ## Model Comparison
 
@@ -105,12 +108,11 @@ The benchmarking compares two models:
 1. **scCausalVI**: A variational autoencoder designed specifically for causal inference in single-cell data
    - Disentangles background cell state from treatment effects
    - Uses a specialized latent space structure
-   - Implements MMD regularization for proper disentanglement
+   - Implements MMD regularization to ensure disentanglement
 
 2. **Model1**: An alternative implementation with different architectural choices
-   - Uses a mutual information neural estimator approach
-   - Implements different regularization strategies
-   - Provides a comparative baseline for evaluation
+   - Uses mutual information minimization along with mmd to ensure disentanglement
+   - Uses MINE (Mutual Information Neural Estimation), a neural network based approach to estimate mutual information
 
 ## Visualization Features
 

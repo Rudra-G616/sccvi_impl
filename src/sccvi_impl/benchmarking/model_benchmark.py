@@ -22,34 +22,35 @@ class ModelBenchmarker:
        - Correlation between z_bg and e_tilda: E[z_bg*e_tilda] - E[z_bg]*E[e_tilda]
        - Average silhouette score on z_bg 
        - L2 norm of difference between x and x_reconstructed
+       
+    Note: For scCausalVI, the n_latent parameter is used for both n_background_latent and n_te_latent.
+    For Model1, n_latent is used as is.
     """
     
     def __init__(
         self, 
         output_dir: str = "data",
-        n_background_latent: int = 10,
-        n_te_latent: int = 5,
         n_latent: int = 15,
         batch_size: int = 128,
-        max_epochs: int = 100
+        max_epochs: int = 100,
+        use_gpu: bool = False
     ):
         """
         Initialize the benchmarker.
         
         Args:
             output_dir: Directory to save/load datasets and results
-            n_background_latent: Dimensionality of background latent space for scCausalVI
-            n_te_latent: Dimensionality of treatment effect latent space for scCausalVI
-            n_latent: Dimensionality of latent space for Model1
+            n_latent: Dimensionality of latent space for both models
+                      (used for n_latent in Model1 and for both n_background_latent and n_te_latent in scCausalVI)
             batch_size: Batch size for training
             max_epochs: Maximum number of epochs for training
+            use_gpu: Whether to use GPU for training if available
         """
         self.output_dir = output_dir
-        self.n_background_latent = n_background_latent
-        self.n_te_latent = n_te_latent
         self.n_latent = n_latent
         self.batch_size = batch_size
         self.max_epochs = max_epochs
+        self.use_gpu = use_gpu
         self.results = {}
         
         # Create results directory
@@ -113,22 +114,26 @@ class ModelBenchmarker:
         control = conditions[0]  # Assume first condition is control
         
         # Initialize and train scCausalVI model
+        # Note: scCausalVI requires both n_background_latent and n_te_latent parameters
+        # We use the same value (self.n_latent) for both to ensure equal dimensionality
         print("Training scCausalVI model...")
         sccausalvi = scCausalVIModel(
             adata,
             condition2int=condition2int,
             control=control,
-            n_background_latent=self.n_background_latent,
-            n_te_latent=self.n_te_latent,
+            n_background_latent=self.n_latent,
+            n_te_latent=self.n_latent,
         )
         sccausalvi.train(
             group_indices_list=group_indices,
             max_epochs=self.max_epochs,
             batch_size=self.batch_size,
-            early_stopping=True
+            early_stopping=True,
+            use_gpu=self.use_gpu
         )
         
         # Initialize and train Model1
+        # Model1 only requires a single n_latent parameter
         print("Training Model1...")
         model1 = Model1(
             adata,
@@ -140,7 +145,8 @@ class ModelBenchmarker:
             group_indices_list=group_indices,
             max_epochs=self.max_epochs,
             batch_size=self.batch_size,
-            early_stopping=True
+            early_stopping=True,
+            use_gpu=self.use_gpu
         )
         
         # Validate models are properly trained
