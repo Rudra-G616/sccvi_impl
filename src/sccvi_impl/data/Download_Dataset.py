@@ -58,4 +58,15 @@ def download_all_datasets(output_dir: str = "data") -> None:
         download_dataset(dataset_name, output_dir)
 
 if __name__ == "__main__":
-    download_all_datasets()
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="Download datasets for benchmarking")
+    parser.add_argument("--dataset", type=str, help="Specific dataset to download (default: all)")
+    parser.add_argument("--output_dir", type=str, default="data", help="Directory to save downloaded datasets")
+    
+    args = parser.parse_args()
+    
+    if args.dataset:
+        download_dataset(args.dataset, args.output_dir)
+    else:
+        download_all_datasets(args.output_dir)

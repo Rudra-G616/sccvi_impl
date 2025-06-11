@@ -35,7 +35,7 @@ if __name__ == "__main__":
     parser.add_argument("--n_latent", type=int, default=15, help="Dimension of latent space (used for both models)")
     parser.add_argument("--batch_size", type=int, default=128, help="Batch size for training")
     parser.add_argument("--max_epochs", type=int, default=100, help="Maximum number of training epochs")
-    parser.add_argument("--use-gpu", action="store_true", help="Use GPU for training if available")
+    parser.add_argument("--use_gpu", action="store_true", help="Use GPU for training if available")
     
     args = parser.parse_args()
     main(args)

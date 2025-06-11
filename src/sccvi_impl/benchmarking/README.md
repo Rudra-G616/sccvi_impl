@@ -51,10 +51,10 @@ Command-line arguments:
 --n_latent N_LATENT       Dimension of latent space (default: 15)
 --max_epochs MAX_EPOCHS   Maximum training epochs (default: 100)
 --batch_size BATCH_SIZE   Training batch size (default: 128)
---use-gpu                 Use GPU for training if available
+--use_gpu                 Use GPU for training if available
 ```
 
-Note: The code now supports GPU acceleration through the `--use-gpu` command-line argument. When enabled, training will use GPU if available.
+Note: The code now supports GPU acceleration through the `--use_gpu` command-line argument. When enabled, training will use GPU if available.
 
 ### Running the Dashboard
 

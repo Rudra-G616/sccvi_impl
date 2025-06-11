@@ -8,8 +8,8 @@ scCausalVI is a variational inference model designed for causal inference in sin
 
 - Provides two model implementations: scCausalVI and Model1
 - Includes benchmarking tools to compare model performance
-- Offers a Streamlit dashboard for visualization
-- Supports cloud-based benchmarking for GPU acceleration
+- Streamlit dashboard for visualization
+- Cloud-based benchmarking for GPU acceleration
 
 ## Features
 
@@ -23,7 +23,7 @@ scCausalVI is a variational inference model designed for causal inference in sin
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/sccvi_impl.git
+git clone https://github.com/Rudra-G616/sccvi_impl.git
 cd sccvi_impl
 
 # Install dependencies
@@ -81,13 +81,5 @@ For more detailed information, see:
 - [Cloud Deployment Guide](src/sccvi_impl/cloud/README_cloud.md)
 
 ## Requirements
-
-Key dependencies include:
-- PyTorch
-- scvi-tools
-- scanpy
-- anndata
-- streamlit
-- plotly
 
 See `requirements.txt` for the complete list of dependencies.
