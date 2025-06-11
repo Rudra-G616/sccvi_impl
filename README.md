@@ -1,4 +1,4 @@
-# scCausalVI Implementation
+# Benchmarking custom model against scCausalVI model
 
 This repository contains an implementation of scCausalVI and a comparative model (Model1) for single-cell causal inference. It includes a benchmarking pipeline to evaluate both models across multiple datasets and visualize their performance.
 
