@@ -244,11 +244,8 @@ class Model1Module(BaseModuleClass):
             # Register buffer to track MINE training statistics
             self.register_buffer("mine_loss_tracker", torch.tensor(0.0))
 
-        cat_list = [n_batch]                    # Don't know what is the purpose of this, but it is in the original code.
+        cat_list = [n_batch]                  
 
-
-
-        #######--------------------------- Encoder ---------------------------- ########
         # Single encoder for all conditions that produces the base latent representation
         self.z_encoder = Encoder(
             n_input,
@@ -264,9 +261,6 @@ class Model1Module(BaseModuleClass):
             var_activation=None,
         )
 
-        ##### ----------------------------------------------------------------- #####
-
-        #####--------------------- Treatment effect encoder ------------------------ #####
         # Single treatment effect encoder that takes latent representation + treatment label as input
         # The output is a treatment effect vector that will be combined with the latent representation
         # after applying attention weights
@@ -283,18 +277,12 @@ class Model1Module(BaseModuleClass):
                 use_batch_norm=True,
                 use_layer_norm=False,
                 var_activation=None,
-            )
-
-        ###### ----------------------------------------------------------------- #####
-
-        ######----------------------- Attention layer------------------------------ ######
+        )
 
         # Attention layer to capture differential treatment effect patterns
         # The output of this layer is used to weight the treatment effect vector before
         # adding it to the latent representation
         self.attention = torch.nn.Linear(self.n_latent, 1)
-
-        ######------------------------------------------------------------------ #####
 
         # Library size encoder.
         self.l_encoder = Encoder(
@@ -309,8 +297,6 @@ class Model1Module(BaseModuleClass):
             use_layer_norm=False,
             var_activation=None,
         )
-
-        ######-----------------------Decoder---------------------------------- ######
 
         # Use concatenated latent space (background + treatment effect), matching scCausalVI implementation
         n_total_latent = n_latent + n_latent  # Background + treatment effect latent space.
