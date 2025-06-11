@@ -3,8 +3,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import json
-import matplotlib.pyplot as plt
-import seaborn as sns
 from typing import Dict, List, Optional
 import plotly.express as px
 import plotly.graph_objects as go
@@ -28,16 +26,28 @@ def load_benchmark_results(results_dir: str) -> Dict:
     # Check if combined results file exists
     combined_path = os.path.join(results_dir, "all_benchmarks.json")
     if os.path.exists(combined_path):
-        with open(combined_path, 'r') as f:
-            return json.load(f)
+        try:
+            with open(combined_path, 'r') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            st.error(f"Error reading combined results file: {e}")
+            return {}
     
     # If no combined file, try to load individual dataset results
     results = {}
-    for filename in os.listdir(results_dir):
-        if filename.endswith("_benchmark.json"):
-            dataset_name = filename.replace("_benchmark.json", "")
-            with open(os.path.join(results_dir, filename), 'r') as f:
-                results[dataset_name] = json.load(f)
+    try:
+        for filename in os.listdir(results_dir):
+            if filename.endswith("_benchmark.json"):
+                dataset_name = filename.replace("_benchmark.json", "")
+                try:
+                    with open(os.path.join(results_dir, filename), 'r') as f:
+                        results[dataset_name] = json.load(f)
+                except (json.JSONDecodeError, IOError) as e:
+                    st.warning(f"Error reading {filename}: {e}")
+                    continue
+    except OSError as e:
+        st.error(f"Error accessing results directory: {e}")
+        return {}
     
     return results
 
@@ -55,16 +65,39 @@ def create_comparison_df(results: Dict) -> pd.DataFrame:
     data = []
     
     for dataset_name, dataset_results in results.items():
-        for model_name in ["sccausalvi", "model1"]:
-            if model_name in dataset_results:
-                model_metrics = dataset_results[model_name]
+        # Get all available models for this dataset instead of hardcoding
+        available_models = list(dataset_results.keys())
+        for model_name in available_models:
+            model_metrics = dataset_results[model_name]
+            # Ensure model_metrics is a dictionary
+            if not isinstance(model_metrics, dict):
+                st.warning(f"Invalid data format for {model_name} on {dataset_name}")
+                continue
+            try:
+                # Validate numeric values
+                correlation_val = model_metrics["correlation_bg_te"]
+                silhouette_val = model_metrics["silhouette_bg"]
+                reconstruction_val = model_metrics["reconstruction_error"]
+                
+                # Check for NaN or infinite values
+                if (pd.isna(correlation_val) or pd.isna(silhouette_val) or pd.isna(reconstruction_val) or
+                    np.isinf(correlation_val) or np.isinf(silhouette_val) or np.isinf(reconstruction_val)):
+                    st.warning(f"Invalid numeric values found for {model_name} on {dataset_name}")
+                    continue
+                
                 data.append({
                     "dataset": dataset_name,
                     "model": model_name,
-                    "correlation_bg_te": model_metrics["correlation_bg_te"],
-                    "silhouette_bg": model_metrics["silhouette_bg"],
-                    "reconstruction_error": model_metrics["reconstruction_error"]
+                    "correlation_bg_te": correlation_val,
+                    "silhouette_bg": silhouette_val,
+                    "reconstruction_error": reconstruction_val
                 })
+            except KeyError as e:
+                st.warning(f"Missing metric {e} for {model_name} on {dataset_name}")
+                continue
+            except (TypeError, ValueError) as e:
+                st.warning(f"Invalid metric values for {model_name} on {dataset_name}: {e}")
+                continue
     
     return pd.DataFrame(data)
 
@@ -76,6 +109,10 @@ def plot_metrics_comparison(df: pd.DataFrame):
     Args:
         df: DataFrame with metrics
     """
+    if df.empty:
+        st.warning("No data available for plotting.")
+        return
+        
     metrics = [
         ("correlation_bg_te", "Correlation (E[z_bg*e_tilda] - E[z_bg]*E[e_tilda])"),
         ("silhouette_bg", "Average Silhouette Score on z_bg"),
@@ -89,9 +126,14 @@ def plot_metrics_comparison(df: pd.DataFrame):
     )
     
     for i, (metric_name, _) in enumerate(metrics):
-        model_colors = {"sccausalvi": "blue", "model1": "orange"}
+        # Get unique models from the DataFrame
+        unique_models = df["model"].unique()
         
-        for model in ["sccausalvi", "model1"]:
+        # Create a color palette for all models
+        colors = px.colors.qualitative.Set1
+        model_colors = {model: colors[i % len(colors)] for i, model in enumerate(unique_models)}
+        
+        for model in unique_models:
             model_df = df[df["model"] == model]
             
             fig.add_trace(
@@ -123,6 +165,10 @@ def plot_radar_chart(df: pd.DataFrame):
     Args:
         df: DataFrame with metrics
     """
+    if df.empty:
+        st.warning("No data available for radar charts.")
+        return
+        
     datasets = df["dataset"].unique()
     metrics = ["correlation_bg_te", "silhouette_bg", "reconstruction_error"]
     
@@ -138,22 +184,35 @@ def plot_radar_chart(df: pd.DataFrame):
             max_val = radar_df[metric].max()
             if max_val > min_val:
                 radar_df[metric] = 1 - ((radar_df[metric] - min_val) / (max_val - min_val))
+            else:
+                # All values are the same, set to neutral value
+                radar_df[metric] = 0.5
         else:
             # For other metrics, higher is better
             min_val = radar_df[metric].min()
             max_val = radar_df[metric].max()
             if max_val > min_val:
                 radar_df[metric] = (radar_df[metric] - min_val) / (max_val - min_val)
+            else:
+                # All values are the same, set to neutral value
+                radar_df[metric] = 0.5
     
     # Create radar charts for each dataset
     for dataset in datasets:
         dataset_df = radar_df[radar_df["dataset"] == dataset]
         
+        # Skip if no data for this dataset
+        if dataset_df.empty:
+            continue
+        
         # Create figure
         fig = go.Figure()
         
+        # Get unique models for this dataset
+        unique_models = dataset_df["model"].unique()
+        
         # Add a trace for each model
-        for model in ["sccausalvi", "model1"]:
+        for model in unique_models:
             model_df = dataset_df[dataset_df["model"] == model]
             if not model_df.empty:
                 fig.add_trace(go.Scatterpolar(
@@ -199,8 +258,14 @@ def app():
     st.sidebar.title("Settings")
     results_dir = st.sidebar.text_input(
         "Results Directory",
-        value=os.path.join("data", "benchmarking_results")
+        value=os.path.join("data", "benchmarking_results"),
+        help="Enter the path to the directory containing benchmark results"
     )
+    
+    # Validate results directory input
+    if not results_dir.strip():
+        st.error("Please enter a valid results directory path.")
+        return
     
     # Load benchmark results
     results = load_benchmark_results(results_dir)
@@ -226,6 +291,10 @@ def app():
     # Create DataFrame for visualization
     df = create_comparison_df(results)
     
+    if df.empty:
+        st.error("No valid benchmark data found to display.")
+        return
+    
     # Main layout
     tab1, tab2, tab3 = st.tabs(["Metric Comparison", "Radar Charts", "Raw Data"])
     
@@ -235,7 +304,7 @@ def app():
         
         st.markdown("""
         #### Metrics Explanation
-        - **Correlation**: Higher values indicate stronger correlation between background and treatment effect latent spaces
+        - **Correlation**: Values closer to zero indicate better disentanglement between background and treatment effect latent spaces
         - **Silhouette Score**: Higher values indicate better separation of conditions in the background latent space
         - **Reconstruction Error**: Lower values indicate better reconstruction of the original data
         """)
