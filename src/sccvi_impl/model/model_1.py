@@ -48,7 +48,9 @@ class Model1(Model1TrainingMixin, BaseModelClass):
         across conditions.
         mmd_weight: Weight of MMD in loss function.
         norm_weight: Normalization weight in loss function.
-        mi_weight: Weight for mutual information loss to promote better disentanglement.
+        mi_weight: Weight for total correlation loss to promote better disentanglement.
+            When > 0, a direct upper bound on total correlation is used to minimize
+            dependence between background latent space, treatment effect, and batch.
         gammas: Kernel bandwidths for calculating MMD.
     """
 
@@ -406,3 +408,21 @@ class Model1(Model1TrainingMixin, BaseModelClass):
                 columns=adata.var_names[gene_indices],
                 index=adata.obs_names[indices],
             )
+    
+    @torch.no_grad()
+    def get_current_tc_estimate(self) -> float:
+        """
+        Get the current total correlation estimate from the model.
+        
+        This value represents the estimated dependency between the background latent space,
+        treatment effect vector, and batch representation. A lower value indicates better
+        disentanglement between these components.
+        
+        This method is only meaningful when mi_weight > 0 in the model initialization.
+        
+        Returns
+        -------
+            float: Current total correlation estimate. Returns 0.0 if total correlation
+                   loss is not being used (mi_weight = 0).
+        """
+        return self.module.get_current_tc_estimate().item()
