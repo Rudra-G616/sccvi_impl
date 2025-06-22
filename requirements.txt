@@ -14,6 +14,7 @@ certifi==2025.4.26
 charset-normalizer==3.4.2
 chex==0.1.89
 click==8.2.1
+colorama==0.4.6
 contourpy==1.3.2
 cycler==0.12.1
 docrep==0.3.2

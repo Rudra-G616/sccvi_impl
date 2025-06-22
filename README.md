@@ -44,7 +44,7 @@ from src.sccvi_impl.data.utils import preprocess
 To ensure all package components can be imported correctly, run:
 
 ```bash
-python sccvi_impl/test_all_imports.py
+python sccvi_impl/test_imports.py
 ```
 
 This will check all imports in the package and report any issues.
