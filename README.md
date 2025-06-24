@@ -52,7 +52,3 @@ This will check all imports in the package and report any issues.
 ## Requirements
 
 See `requirements.txt` for a list of dependencies.
-
-## License
-
-[License information]

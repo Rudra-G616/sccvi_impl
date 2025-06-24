@@ -691,11 +691,13 @@ class Model1Module(BaseModuleClass):
             loss_mmd *= self.mmd_weight
 
         # Norm cost, e.g. L2 on treatment effect vector in treatments.
-        loss_norm = torch.tensor(0.0, device=x.device)
+        loss_norm = torch.zeros_like(recon_loss)  # Initialize with zeros matching batch size
         if self.norm_weight > 0:
             e_t_trt = trt_inference['e_t']
+            # Only apply to treatment samples
             norm_val = (e_t_trt ** 2).sum(dim=1)
-            loss_norm = self.norm_weight * norm_val
+            # Ensure loss_norm has correct batch size by placing values in appropriate positions
+            loss_norm[~ctrl_mask] = self.norm_weight * norm_val
 
         # Total Correlation loss using direct upper bound
         loss_tc = torch.tensor(0.0, device=x.device)
@@ -761,12 +763,17 @@ class Model1Module(BaseModuleClass):
         # Summation
         total_loss = recon_loss.mean() + kl_bg.mean() + kl_library.mean() + loss_mmd + loss_norm.mean() + loss_tc
 
+        # Convert scalar loss components to per-sample tensors with the same batch size as recon_loss
+        batch_size = recon_loss.size(0)
+        loss_mmd_per_sample = torch.zeros_like(recon_loss) + (loss_mmd / batch_size if batch_size > 0 else 0)
+        loss_tc_per_sample = torch.zeros_like(recon_loss) + (loss_tc / batch_size if batch_size > 0 else 0)
+        
         kl_local = {
             'loss_kl_bg': kl_bg,
             'loss_kl_l': kl_library,
-            'loss_mmd': loss_mmd,
+            'loss_mmd': loss_mmd_per_sample,
             'loss_norm': loss_norm,
-            'loss_tc': loss_tc,
+            'loss_tc': loss_tc_per_sample,
             'recon_loss': recon_loss,
         }
 

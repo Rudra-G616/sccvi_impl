@@ -82,6 +82,7 @@ optax==0.2.4
 orbax-checkpoint==0.11.13
 packaging==24.2
 pandas==2.2.3
+paramiko==3.5.1
 patsy==1.0.1
 pillow==11.2.1
 plotly==6.1.2
