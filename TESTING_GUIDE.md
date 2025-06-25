@@ -7,7 +7,7 @@ This guide provides instructions for testing the import functionality of your SC
 The `test_imports.py` script checks if all modules in the project can be successfully imported:
 
 ```bash
-python sccvi_impl/test_imports.py
+python test_imports.py
 ```
 
 ### Options:
@@ -24,7 +24,7 @@ The `test_import_usage.py` script performs more comprehensive testing by:
 3. Testing if basic functionality (functions and classes) can be executed
 
 ```bash
-python sccvi_impl/test_import_usage.py
+python test_import_usage.py
 ```
 
 ### Options:
@@ -36,7 +36,7 @@ python sccvi_impl/test_import_usage.py
 1. **Module not found errors**:
    - Ensure your PYTHONPATH includes the project root
    - Check if your package is properly installed (e.g., in development mode)
-   - Verify package structure matches setup.py configuration
+   - Verify package structure matches `pyproject.toml` configuration
 
 2. **Import errors in specific modules**:
    - Check if all dependencies are installed
@@ -55,4 +55,29 @@ For development, install the package in editable mode:
 pip install -e .
 ```
 
-This command should be run from the root directory of the project (where setup.py is located). It ensures that your package structure is correctly recognized by Python, and any changes you make to the code will be immediately available without reinstalling the package.
+This command should be run from the root directory of the project (where `pyproject.toml` is located). It ensures that your package structure is correctly recognized by Python, and any changes you make to the code will be immediately available without reinstalling the package.
+
+## Project Structure
+
+The SCCVI_IMPL project is organized as follows:
+
+```
+sccvi_impl/
+├── pyproject.toml
+├── README.md
+├── requirements.txt
+├── test_import_usage.py
+├── test_imports.py
+├── TESTING_GUIDE.md
+└── src/
+    └── sccvi_impl/
+        ├── __init__.py
+        ├── cloud/
+        ├── data/
+        ├── model/
+        ├── module/
+        ├── results/
+        └── scripts/
+```
+
+Testing scripts are located at the root of the project for easy access.
