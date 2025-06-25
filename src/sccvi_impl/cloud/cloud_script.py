@@ -265,7 +265,7 @@ def download_results(ssh_string, local_root_dir):
     
     # Download benchmark_results.csv if it exists
     remote_results = "~/sccvi_project/src/sccvi_impl/results/simulated/benchmark_results.csv"
-    local_results = os.path.join(local_results_dir, "benchmark_results.csv")
+    local_results = os.path.join(local_results_dir, "benchmarking_results.csv")
     
     # Make sure remote results directory exists
     run_ssh_command("mkdir -p ~/sccvi_project/src/sccvi_impl/results/simulated", ssh_string)
