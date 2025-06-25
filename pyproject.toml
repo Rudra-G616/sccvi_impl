@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [tool.setuptools]
-package-dir = {"" = "sccvi_impl/src"}
+package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
-where = ["sccvi_impl/src"]
+where = ["src"]
