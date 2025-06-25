@@ -8,7 +8,7 @@ Model 1 is inspired from scCausalVI model with few potential improvements :-
 
 - A unified encoder for all treatment values, reducing the number of model parameters and thus improving model scalability over a large number of treatment values while maintaining performance similar to scCausalVI.
 
-- Minimizing Total Correlation to ensure proper disentanglement in background latent variable ($z_{bg}$), treatment effect latent variable ($\tilde e_{t}$) and batch covariate ($c$)
+- Minimizing *Total Correlation* to ensure proper disentanglement in background latent variable ($z_{bg}$), treatment effect latent variable ($\tilde e_{t}$) and batch covariate ($c$)
 
 ## Evaluation Metrics
 
@@ -99,4 +99,8 @@ See `requirements.txt` for a list of dependencies.
 
 ## Useful Links
 
-The official implementation of scCausalVI can be found at the following link. - https://github.com/ShaokunAn/scCausalVI.git
+- The official implementation of scCausalVI can be found at the following link. - https://github.com/ShaokunAn/scCausalVI.git
+
+- Some components of this project are informed by ideas from:  
+[**Isolating Sources of Disentanglement in VAEs**](https://arxiv.org/abs/1802.04942)  
+*Ricky T. Q. Chen, Xuechen Li, Roger Grosse, David Duvenaud*
