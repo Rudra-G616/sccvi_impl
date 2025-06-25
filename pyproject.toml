@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sccvi_impl"
+version = "0.1"
+description = "Benchmarking custom model w.r.t. scCausalVI"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    # Dependencies same as requirements.txt
+]
+
+[tool.setuptools]
+package-dir = {"" = "sccvi_impl/src"}
+
+[tool.setuptools.packages.find]
+where = ["sccvi_impl/src"]
