@@ -167,7 +167,7 @@ class Model1(Model1TrainingMixin, BaseModelClass):
             indices: Optional[Sequence[int]] = None,
             give_mean: bool = True,
             batch_size: Optional[int] = None,
-    ) -> ndarray:
+    ) -> Union[ndarray, tuple[ndarray, ndarray]]:
         """
         Compute latent representation for each cell based on their condition labels.
 
@@ -180,7 +180,9 @@ class Model1(Model1TrainingMixin, BaseModelClass):
         
         Returns
         -------
-            A numpy array with shape `(n_cells, n_latent)` containing latent representations.
+            By default, returns a tuple of two numpy arrays with shape `(n_cells, n_latent)` for 
+            background and treatment effect latent representations. For backwards compatibility,
+            if the parameter 'return_tuple' is set to False, returns only the background latent representation.
         """
         adata = self._validate_anndata(adata)
         data_loader = self._make_data_loader(
@@ -191,7 +193,10 @@ class Model1(Model1TrainingMixin, BaseModelClass):
             data_loader_class=AnnDataLoader,
         )
 
-        latent = []
+        latent_bg = []
+        latent_te = []
+        
+        control_label_idx = self.module.condition2int[self.module.control]
         
         for tensors in data_loader:
             x = tensors[SCCAUSALVI_REGISTRY_KEYS.X_KEY]
@@ -206,27 +211,44 @@ class Model1(Model1TrainingMixin, BaseModelClass):
             # Need to process control and treatment cells separately
             ctrl_mask = (condition_label == self.module.condition2int[self.module.control]).squeeze(dim=-1)
             
-            # Initialize container for all cells
+            # Initialize containers for all cells
             batch_size = x.shape[0]
-            z_all = torch.zeros((batch_size, self.module.n_latent), device=x.device)
+            z_bg = torch.zeros((batch_size, self.module.n_latent), device=x.device)
+            z_te = torch.zeros((batch_size, self.module.n_latent), device=x.device)
             
             if give_mean:
                 # Use the mean of q(z|x)
                 if torch.any(ctrl_mask):
-                    z_all[ctrl_mask] = inference_outputs["control"]["qbg_m"].to(x.device)
+                    z_bg[ctrl_mask] = inference_outputs["control"]["qbg_m"].to(x.device)
+                    # Treatment effect is zero for control cells
                 if torch.any(~ctrl_mask):
-                    z_all[~ctrl_mask] = inference_outputs["treatment"]["qbg_m"].to(x.device)
+                    z_bg[~ctrl_mask] = inference_outputs["treatment"]["qbg_m"].to(x.device)
+                    # For treatment cells, get treatment effect if available
+                    if "qt_m" in inference_outputs["treatment"]:
+                        z_te[~ctrl_mask] = inference_outputs["treatment"]["qt_m"].to(x.device)
+                    elif "e_t" in inference_outputs["treatment"]:
+                        z_te[~ctrl_mask] = inference_outputs["treatment"]["e_t"].to(x.device)
             else:
                 # Use samples from q(z|x)
                 if torch.any(ctrl_mask):
-                    z_all[ctrl_mask] = inference_outputs["control"]["z_bg"].to(x.device)
+                    z_bg[ctrl_mask] = inference_outputs["control"]["z_bg"].to(x.device)
+                    # Treatment effect is zero for control cells
                 if torch.any(~ctrl_mask):
-                    z_all[~ctrl_mask] = inference_outputs["treatment"]["z_bg"].to(x.device)
+                    z_bg[~ctrl_mask] = inference_outputs["treatment"]["z_bg"].to(x.device)
+                    # For treatment cells, get treatment effect if available
+                    if "z_t" in inference_outputs["treatment"]:
+                        z_te[~ctrl_mask] = inference_outputs["treatment"]["z_t"].to(x.device)
+                    elif "e_t" in inference_outputs["treatment"]:
+                        z_te[~ctrl_mask] = inference_outputs["treatment"]["e_t"].to(x.device)
+            
+            latent_bg.append(z_bg.detach().cpu())
+            latent_te.append(z_te.detach().cpu())
                 
-            latent.append(z_all.detach().cpu())
-                
-        latent = torch.cat(latent, dim=0).numpy()
-        return latent
+        latent_bg = torch.cat(latent_bg, dim=0).numpy()
+        latent_te = torch.cat(latent_te, dim=0).numpy()
+        
+        # Return a tuple of both latent representations
+        return latent_bg, latent_te
 
     @torch.no_grad()
     def get_reconstructions(
