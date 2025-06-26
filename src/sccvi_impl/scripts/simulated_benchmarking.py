@@ -348,7 +348,7 @@ def evaluate_models(model1, model_scvi, adata, control_key, args):
     
     # Save results
     os.makedirs(args.output_dir, exist_ok=True)
-    results_path = os.path.join(args.output_dir, 'benchmark_results.csv')
+    results_path = os.path.join(args.output_dir, 'benchmarking_results.csv')
     results_df.to_csv(results_path, index=False)
     print(f"Results saved to {results_path}")
     

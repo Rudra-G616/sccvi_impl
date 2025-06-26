@@ -251,9 +251,14 @@ class scCausalVIModule(BaseModuleClass):
         If src = 'treatment', for each unique treat label in `condition_label`,
         use that label's background & treatment_effect encoders.
         """
-
+        # Ensure all input tensors are on the same device as the module
+        device = next(self.parameters()).device
+        x = x.to(device)
+        batch_index = batch_index.to(device)
+        condition_label = condition_label.to(device)
+        
         n_cells = x.shape[0]
-        x_ = torch.log(x + 1)
+        x_ = torch.log(x + 1).to(device)
 
         z_bg = torch.zeros((n_cells, self.n_background_latent), device=x.device)
         qbg_m = torch.zeros((n_cells, self.n_background_latent), device=x.device)
@@ -384,11 +389,12 @@ class scCausalVIModule(BaseModuleClass):
         condition_label = tensors[SCCAUSALVI_REGISTRY_KEYS.CONDITION_KEY]
 
         ctrl_mask = (condition_label == self.condition2int[self.control]).squeeze(dim=-1)
+        device = next(self.parameters()).device
         n_cells = x.shape[0]
 
-        z_bg_merged = torch.zeros((n_cells, self.n_background_latent), device=x.device)
-        z_t_merged = torch.zeros((n_cells, self.n_te_latent), device=x.device)
-        library_merged = torch.zeros((n_cells, 1), device=x.device)
+        z_bg_merged = torch.zeros((n_cells, self.n_background_latent), device=device)
+        z_t_merged = torch.zeros((n_cells, self.n_te_latent), device=device)
+        library_merged = torch.zeros((n_cells, 1), device=device)
 
         ctrl_inference = inference_outputs['control']
         treatment_inference = inference_outputs['treatment']
@@ -418,6 +424,12 @@ class scCausalVIModule(BaseModuleClass):
             library: torch.Tensor,
             batch_index: List[int],
     ) -> Dict[str, Dict[str, torch.Tensor]]:
+        # Ensure all inputs are on the module's device
+        device = next(self.parameters()).device
+        z_bg = z_bg.to(device)
+        z_t = z_t.to(device)
+        library = library.to(device)
+        batch_index = torch.as_tensor(batch_index, device=device)
 
         attention_weights = torch.softmax(self.attention(z_t), dim=-1)
         z_t = attention_weights * z_t
@@ -486,11 +498,16 @@ class scCausalVIModule(BaseModuleClass):
         return kl_library.sum(dim=-1)
 
     def mmd_loss(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
-        cost = torch.mean(gram_matrix(x, x, gammas=self.gammas.to(self.device)))
-        cost += torch.mean(gram_matrix(y, y, gammas=self.gammas.to(self.device)))
-        cost -= 2 * torch.mean(gram_matrix(x, y, gammas=self.gammas.to(self.device)))
+        device = next(self.parameters()).device
+        x = x.to(device)
+        y = y.to(device)
+        gammas = self.gammas.to(device)
+        
+        cost = torch.mean(gram_matrix(x, x, gammas=gammas))
+        cost += torch.mean(gram_matrix(y, y, gammas=gammas))
+        cost -= 2 * torch.mean(gram_matrix(x, y, gammas=gammas))
         if cost < 0:  # Handle numerical instability.
-            return torch.tensor(0)
+            return torch.tensor(0.0, device=device)
         return cost
 
     def _generic_loss(
@@ -534,9 +551,10 @@ class scCausalVIModule(BaseModuleClass):
         The entire batch is in `tensors`.
         We separate  control vs. treat, compute the relevant losses, and combine.
         """
-        x = tensors[SCCAUSALVI_REGISTRY_KEYS.X_KEY]
-        batch_index = tensors[SCCAUSALVI_REGISTRY_KEYS.BATCH_KEY]
-        condition_label = tensors[SCCAUSALVI_REGISTRY_KEYS.CONDITION_KEY]
+        device = next(self.parameters()).device
+        x = tensors[SCCAUSALVI_REGISTRY_KEYS.X_KEY].to(device)
+        batch_index = tensors[SCCAUSALVI_REGISTRY_KEYS.BATCH_KEY].to(device)
+        condition_label = tensors[SCCAUSALVI_REGISTRY_KEYS.CONDITION_KEY].to(device)
 
         ctrl_mask = (condition_label == self.condition2int[self.control]).squeeze(dim=-1)
         x_ctrl = x[ctrl_mask]

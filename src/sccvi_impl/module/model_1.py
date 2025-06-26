@@ -335,29 +335,35 @@ class Model1Module(BaseModuleClass):
         The latent representation and treatment effect will be concatenated in the generative step
         after applying attention weights to the treatment effect, following the scCausalVI approach.
         """
+        # Ensure input tensors are on the same device as the module
+        device = next(self.parameters()).device
+        x = x.to(device)
+        batch_index = batch_index.to(device)
+        condition_label = condition_label.to(device)
+        
         n_cells = x.shape[0]
         x_ = torch.log(x + 1)
 
-        z_bg = torch.zeros((n_cells, self.n_latent), device=x.device)
-        qbg_m = torch.zeros((n_cells, self.n_latent), device=x.device)
-        qbg_v = torch.zeros((n_cells, self.n_latent), device=x.device)
+        z_bg = torch.zeros((n_cells, self.n_latent), device=device)
+        qbg_m = torch.zeros((n_cells, self.n_latent), device=device)
+        qbg_v = torch.zeros((n_cells, self.n_latent), device=device)
 
-        e_t = torch.zeros((n_cells, self.n_latent), device=x.device)
-        qt_m = torch.zeros((n_cells, self.n_latent), device=x.device)
-        qt_v = torch.zeros((n_cells, self.n_latent), device=x.device)
+        e_t = torch.zeros((n_cells, self.n_latent), device=device)
+        qt_m = torch.zeros((n_cells, self.n_latent), device=device)
+        qt_v = torch.zeros((n_cells, self.n_latent), device=device)
 
-        library = torch.zeros((n_cells, 1), device=x.device)
+        library = torch.zeros((n_cells, 1), device=device)
         ql_m = None
         ql_v = None
 
         if not self.use_observed_lib_size:
-            ql_m = torch.zeros((n_cells, 1), device=x.device)
-            ql_v = torch.zeros((n_cells, 1), device=x.device)
+            ql_m = torch.zeros((n_cells, 1), device=device)
+            ql_v = torch.zeros((n_cells, 1), device=device)
 
         # Library size
         if self.use_observed_lib_size:
             lib_ = torch.log(x.sum(dim=1, keepdim=True) + 1e-8)
-            library[:] = lib_
+            library[:] = lib_.to(device)
         else:
             qlm, qlv, lib_ = self.l_encoder(x_, batch_index)
             ql_m[:] = qlm
@@ -419,6 +425,12 @@ class Model1Module(BaseModuleClass):
             n_samples: int = 1,
     ) -> Dict[str, Dict[str, torch.Tensor]]:
 
+        # Ensure all inputs are on the same device as the module
+        device = next(self.parameters()).device
+        x = x.to(device)
+        condition_label = condition_label.to(device)
+        batch_index = batch_index.to(device)
+
         # Inference of data
         ctrl_mask = (condition_label == self.condition2int[self.control]).squeeze(dim=-1)
 
@@ -455,16 +467,17 @@ class Model1Module(BaseModuleClass):
         are kept separate here and will be concatenated in the generative step
         after applying attention weights to e_t, following the scCausalVI approach.
         """
-        x = tensors[SCCAUSALVI_REGISTRY_KEYS.X_KEY]
-        batch_index = tensors[SCCAUSALVI_REGISTRY_KEYS. BATCH_KEY]
-        condition_label = tensors[SCCAUSALVI_REGISTRY_KEYS.CONDITION_KEY]
+        device = next(self.parameters()).device
+        x = tensors[SCCAUSALVI_REGISTRY_KEYS.X_KEY].to(device)
+        batch_index = tensors[SCCAUSALVI_REGISTRY_KEYS.BATCH_KEY].to(device)
+        condition_label = tensors[SCCAUSALVI_REGISTRY_KEYS.CONDITION_KEY].to(device)
 
         ctrl_mask = (condition_label == self.condition2int[self.control]).squeeze(dim=-1)
         n_cells = x.shape[0]
 
-        z_bg_merged = torch.zeros((n_cells, self.n_latent), device=x.device)
-        e_t_merged = torch.zeros((n_cells, self.n_latent), device=x.device)
-        library_merged = torch.zeros((n_cells, 1), device=x.device)
+        z_bg_merged = torch.zeros((n_cells, self.n_latent), device=device)
+        e_t_merged = torch.zeros((n_cells, self.n_latent), device=device)
+        library_merged = torch.zeros((n_cells, 1), device=device)
 
         ctrl_inference = inference_outputs['control']
         treatment_inference = inference_outputs['treatment']

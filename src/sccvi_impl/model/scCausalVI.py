@@ -404,9 +404,7 @@ class scCausalVIModel(scCausalVITrainingMixin, BaseModelClass):
 
         Returns:
             AnnData object of count expression prediction.
-
         """
-
         adata = self._validate_anndata(adata)
         data_loader = self._make_data_loader(
             adata=adata,
@@ -419,13 +417,13 @@ class scCausalVIModel(scCausalVITrainingMixin, BaseModelClass):
         exprs = []
         predicted_batch = []
         control_label_idx = self.module.condition2int[self.module.control]
-
         label_to_name = _invert_dict(self.module.condition2int)
 
         for tensors in data_loader:
-            x = tensors[SCCAUSALVI_REGISTRY_KEYS.X_KEY]
-            batch_index = tensors[SCCAUSALVI_REGISTRY_KEYS.BATCH_KEY]
-            label_index = tensors[SCCAUSALVI_REGISTRY_KEYS.CONDITION_KEY]
+            # Move all input tensors to the module's device
+            x = tensors[SCCAUSALVI_REGISTRY_KEYS.X_KEY].to(self.module.device)
+            batch_index = tensors[SCCAUSALVI_REGISTRY_KEYS.BATCH_KEY].to(self.module.device)
+            label_index = tensors[SCCAUSALVI_REGISTRY_KEYS.CONDITION_KEY].to(self.module.device)
             unique_labels = label_index.unique()
 
             latent_bg_tensor = torch.zeros([x.shape[0], self.module.n_background_latent], device=self.module.device)
@@ -462,33 +460,43 @@ class scCausalVIModel(scCausalVITrainingMixin, BaseModelClass):
                     latent_t_tensor[mask] = outputs["z_t"]
                     latent_library_tensor[mask] = outputs["library"]
 
-            # Merge background & treatement latent representations into one tensor
+            # Merge background & treatment latent representations into one tensor
             latent_tensor = torch.cat([latent_bg_tensor, latent_t_tensor], dim=-1)
 
             if target_batch is None:
-                # Prediction under the same batch
-                target_batch_index = batch_index
+                target_batch_index = batch_index.to(self.module.device)
             else:
-                # Prediction under given target batch
-                target_batch_index = torch.full_like(batch_index, fill_value=target_batch)
+                target_batch_index = torch.full_like(batch_index, fill_value=target_batch, device=self.module.device)
 
-            px_scale_tensor, px_r_tensor, px_rate_tensor, px_dropout_tensor = self.module.decoder(
-                self.module.dispersion,
-                latent_tensor,
-                latent_library_tensor,
-                target_batch_index,
-            )
-            if px_r_tensor is None:
-                px_r_tensor = torch.exp(self.module.px_r)
+            # Use try-except to help diagnose any remaining device mismatch issues
+            try:
+                px_scale_tensor, px_r_tensor, px_rate_tensor, px_dropout_tensor = self.module.decoder(
+                    self.module.dispersion,
+                    latent_tensor,
+                    latent_library_tensor,
+                    target_batch_index,
+                )
+                
+                if px_r_tensor is None:
+                    px_r_tensor = torch.exp(self.module.px_r)
 
-            count_tensor = ZeroInflatedNegativeBinomial(
-                mu=px_rate_tensor,
-                theta=px_r_tensor,
-                zi_logits=px_dropout_tensor,
-            ).sample()
+                count_tensor = ZeroInflatedNegativeBinomial(
+                    mu=px_rate_tensor,
+                    theta=px_r_tensor,
+                    zi_logits=px_dropout_tensor,
+                ).sample()
 
-            exprs.append(count_tensor.detach().cpu())
-            predicted_batch.append(target_batch_index.detach().cpu())
+                exprs.append(count_tensor.detach().cpu())
+                predicted_batch.append(target_batch_index.detach().cpu())
+                
+            except RuntimeError as e:
+                # Log device information for debugging
+                print(f"Device Info:")
+                print(f"Module device: {self.module.device}")
+                print(f"latent_tensor device: {latent_tensor.device}")
+                print(f"latent_library_tensor device: {latent_library_tensor.device}")
+                print(f"target_batch_index device: {target_batch_index.device}")
+                raise e
 
         expression = torch.cat(exprs, dim=0).numpy()
         predicted_batch_all = torch.cat(predicted_batch, dim=0).numpy()

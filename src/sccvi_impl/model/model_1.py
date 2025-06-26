@@ -195,8 +195,8 @@ class Model1(Model1TrainingMixin, BaseModelClass):
         
         for tensors in data_loader:
             x = tensors[SCCAUSALVI_REGISTRY_KEYS.X_KEY]
-            batch_index = tensors[SCCAUSALVI_REGISTRY_KEYS.BATCH_KEY]
-            condition_label = tensors[SCCAUSALVI_REGISTRY_KEYS.CONDITION_KEY]
+            batch_index = tensors[SCCAUSALVI_REGISTRY_KEYS.BATCH_KEY].to(x.device)
+            condition_label = tensors[SCCAUSALVI_REGISTRY_KEYS.CONDITION_KEY].to(x.device)
             
             # The inference method returns a dictionary with 'control' and 'treatment' keys
             inference_outputs = self.module.inference(
@@ -213,15 +213,15 @@ class Model1(Model1TrainingMixin, BaseModelClass):
             if give_mean:
                 # Use the mean of q(z|x)
                 if torch.any(ctrl_mask):
-                    z_all[ctrl_mask] = inference_outputs["control"]["qbg_m"]
+                    z_all[ctrl_mask] = inference_outputs["control"]["qbg_m"].to(x.device)
                 if torch.any(~ctrl_mask):
-                    z_all[~ctrl_mask] = inference_outputs["treatment"]["qbg_m"]
+                    z_all[~ctrl_mask] = inference_outputs["treatment"]["qbg_m"].to(x.device)
             else:
                 # Use samples from q(z|x)
                 if torch.any(ctrl_mask):
-                    z_all[ctrl_mask] = inference_outputs["control"]["z_bg"]
+                    z_all[ctrl_mask] = inference_outputs["control"]["z_bg"].to(x.device)
                 if torch.any(~ctrl_mask):
-                    z_all[~ctrl_mask] = inference_outputs["treatment"]["z_bg"]
+                    z_all[~ctrl_mask] = inference_outputs["treatment"]["z_bg"].to(x.device)
                 
             latent.append(z_all.detach().cpu())
                 
