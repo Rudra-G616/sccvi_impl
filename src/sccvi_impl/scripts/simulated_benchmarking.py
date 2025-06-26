@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Simulated benchmarking script for comparing model_1 and scCausalVI models on simulated data.
 
@@ -12,7 +11,6 @@ This script:
 
 import os
 import sys
-import argparse
 import numpy as np
 import pandas as pd
 import scanpy as sc
@@ -20,6 +18,8 @@ import anndata as ad
 import torch
 import matplotlib.pyplot as plt
 import seaborn as sns
+import argparse
+import logging
 from sklearn.metrics import r2_score
 from scipy.stats import pearsonr
 from sklearn.metrics.cluster import silhouette_score
@@ -30,10 +30,17 @@ from ..model.model_1 import Model1
 from ..model.scCausalVI import scCausalVIModel as scCausalVI
 from ..data.utils import gram_matrix
 
+logging.getLogger("pytorch_lightning").setLevel(logging.WARNING)
+logging.getLogger("lightning").setLevel(logging.WARNING)
+logging.basicConfig(level=logging.WARNING)
+
+import warnings
+warnings.filterwarnings("ignore")
+
 # Set random seed for reproducibility
 np.random.seed(42)
 torch.manual_seed(42)
-sc.settings.verbosity = 1
+sc.settings.verbosity = 0  
 sc.settings.set_figure_params(dpi=100, figsize=(10, 8))
 
 def parse_args():
@@ -151,8 +158,9 @@ def setup_models(adata, batch_key='cell_type', condition_key='condition'):
         dropout_rate=0.1,
         use_observed_lib_size=True,
         use_mmd=True,
-        mmd_weight=1.0,
-        norm_weight=0.3
+        mmd_weight=1.5,
+        norm_weight=0.5,
+        mi_weight=2
     )
     
     model_scvi = scCausalVI(
@@ -166,8 +174,8 @@ def setup_models(adata, batch_key='cell_type', condition_key='condition'):
         dropout_rate=0.1,
         use_observed_lib_size=True,
         use_mmd=True,
-        mmd_weight=1.0,
-        norm_weight=0.3
+        mmd_weight=1.5,
+        norm_weight=0.5
     )
     
     return model1, model_scvi, condition2int, control_key
@@ -186,11 +194,20 @@ def train_models(model1, model_scvi, group_indices_list, args):
     batch_size = min(args.batch_size, train_size // 2)
     print(f"Using batch size: {batch_size}")
     
+    # Disable epoch logging and progress bars
+    trainer_kwargs = {
+        'enable_progress_bar': False,
+        'enable_model_summary': False,
+        'logger': False,
+        'enable_checkpointing': False
+    }
+    
     model1.train(
         group_indices_list,
         max_epochs=args.n_epochs,
         use_gpu=args.use_gpu,
-        batch_size=batch_size
+        batch_size=batch_size,
+        **trainer_kwargs
     )
     
     print("Training scCausalVI...")
@@ -198,7 +215,8 @@ def train_models(model1, model_scvi, group_indices_list, args):
         group_indices_list,
         max_epochs=args.n_epochs,
         use_gpu=args.use_gpu,
-        batch_size=batch_size
+        batch_size=batch_size,
+        **trainer_kwargs
     )
     
     return model1, model_scvi
@@ -285,8 +303,11 @@ def evaluate_models(model1, model_scvi, adata, control_key, args):
     
     # Get latent representations
     print("Getting latent representations...")
-    model1_latent = model1.get_latent_representation(adata)
+    model1_latent_tuple = model1.get_latent_representation(adata)
     model_scvi_latent_bg, model_scvi_latent_te = model_scvi.get_latent_representation(adata)
+    
+    # Unpack Model1 latent representations (now returns a tuple)
+    model1_latent_bg, model1_latent_te = model1_latent_tuple
     
     # Get reconstructions for L2 norm computation
     print("Getting reconstructions...")
@@ -308,23 +329,12 @@ def evaluate_models(model1, model_scvi, adata, control_key, args):
     print("Computing metrics for Model1...")
     results['model'].append('Model1')
     results['l2_norm'].append(compute_l2_norm(model1_recon, original_data))
-    results['cov_z_bg_c'].append(compute_covariance_metric(model1_latent, batch_labels))
+    results['cov_z_bg_c'].append(compute_covariance_metric(model1_latent_bg, batch_labels))
     
-    # Check if model1_latent has background and treatment effect components
-    # For model1, we don't assume a specific structure, so we just check dimensions
-    if model1_latent.shape[1] >= 20:  # If it has at least twice the n_latent dimension
-        # Assuming first half is background and second half is treatment effect
-        z_bg = model1_latent[:, :model1_latent.shape[1]//2]
-        e_tilda = model1_latent[:, model1_latent.shape[1]//2:]
-        results['cov_z_bg_e_tilda'].append(compute_covariance_metric(z_bg, e_tilda))
-        results['cov_e_tilda_c'].append(compute_covariance_metric(e_tilda, condition_labels))
-        results['asw_z_bg'].append(compute_asw(z_bg, batch_labels))
-    else:
-        # If the latent doesn't have the expected structure, use zeros or other placeholder values
-        print("Warning: Model1 latent representation doesn't have the expected structure")
-        results['cov_z_bg_e_tilda'].append(0.0)
-        results['cov_e_tilda_c'].append(0.0)
-        results['asw_z_bg'].append(0.0)
+    # Now that we have separate background and treatment effect vectors, use them directly
+    results['cov_z_bg_e_tilda'].append(compute_covariance_metric(model1_latent_bg, model1_latent_te))
+    results['cov_e_tilda_c'].append(compute_covariance_metric(model1_latent_te, condition_labels))
+    results['asw_z_bg'].append(compute_asw(model1_latent_bg, batch_labels))
     
     # Compute metrics for scCausalVI
     print("Computing metrics for scCausalVI...")
@@ -394,22 +404,17 @@ def main():
     args = parse_args()
     
     try:
-        # Download data
+
         data_path = download_data(args.data_dir)
-        
-        # Load and preprocess data
+            
         adata = load_and_preprocess_data(data_path, skip_visualization=args.skip_visualization)
-        
-        # Setup models
+    
         model1, model_scvi, condition2int, control_key = setup_models(adata)
         
-        # Prepare data for training
         group_indices_list = prepare_data_for_training(adata)
         
-        # Train models
         model1, model_scvi = train_models(model1, model_scvi, group_indices_list, args)
         
-        # Evaluate models
         results = evaluate_models(model1, model_scvi, adata, control_key, args)
         
         print("Benchmark completed successfully!")
