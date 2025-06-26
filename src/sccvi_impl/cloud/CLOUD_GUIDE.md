@@ -34,23 +34,17 @@ python -m sccvi_impl.cloud.cloud_script --ssh-string "ssh -o StrictHostKeyChecki
 
 Basic usage with default parameters:
 ```bash
-python -m sccvi_impl.cloud.cloud_script \
-  --ssh-string "ssh -o StrictHostKeyChecking=no -p 12014 root@ssha.jarvislabs.ai"
+python -m sccvi_impl.cloud.cloud_script --ssh-string "ssh -o StrictHostKeyChecking=no -p 12014 root@ssha.jarvislabs.ai"
 ```
 
 Custom training parameters:
 ```bash
-python -m sccvi_impl.cloud.cloud_script \
-  --ssh-string "ssh -o StrictHostKeyChecking=no -p 12014 root@ssha.jarvislabs.ai" \
-  --n_epochs 200 \
-  --batch_size 256
+python -m sccvi_impl.cloud.cloud_script --ssh-string "ssh -o StrictHostKeyChecking=no -p 12014 root@ssha.jarvislabs.ai" --n_epochs 200 --batch_size 256
 ```
 
 Force CPU usage:
 ```bash
-python -m sccvi_impl.cloud.cloud_script \
-  --ssh-string "ssh -o StrictHostKeyChecking=no -p 12014 root@ssha.jarvislabs.ai" \
-  --no-gpu
+python -m sccvi_impl.cloud.cloud_script --ssh-string "ssh -o StrictHostKeyChecking=no -p 12014 root@ssha.jarvislabs.ai" --no-gpu
 ```
 
 ## What the Script Does
