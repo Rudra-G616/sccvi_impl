@@ -68,7 +68,7 @@ def run_benchmarking(ssh_string, n_epochs=100, use_gpu=True, batch_size=128):
 def download_results(ssh_string):
     """Download the results file from the cloud."""
     cloud_results = "/root/sccvi_impl/sccvi_impl/src/sccvi_impl/results/simulated/benchmarking_results.csv"
-    local_results = str(Path(__file__).parent.parent.parent / "results/simulated/benchmarking_results.csv")
+    local_results = str(Path(__file__).parent.parent / "results/simulated/benchmarking_results.csv")
     
     # First verify the remote file exists
     verify_cmd = f"test -f {cloud_results} && echo 'File exists'"
