@@ -56,7 +56,6 @@ sccvi_impl/                 # Project root
 │       ├── model/          # Model implementations
 │       │   └── base/       # Base model utilities
 │       ├── module/         # PyTorch modules
-│       ├── results/        # Benchmark results
 │       └── scripts/        # Benchmarking scripts
 ```
 
