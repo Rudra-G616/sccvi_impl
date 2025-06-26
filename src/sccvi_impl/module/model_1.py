@@ -14,77 +14,56 @@ from torch.distributions import kl_divergence as kl
 from ..data.utils import gram_matrix
 
 
+import torch
+
 def compute_tc_bound(z_mean: torch.Tensor, z_var: torch.Tensor):
     """
     Compute the upper bound on total correlation (TC) from the paper
     "Isolating Sources of Disentanglement in Variational Autoencoders"
     (https://arxiv.org/pdf/1802.04942).
-    
-    This implements a direct analytical upper bound on TC which can be computed
-    without training a discriminator network. It measures the dependence between
-    dimensions of the latent space.
-    
+
     Args:
-        z_mean: Mean of q(z|x) - shape (batch_size, latent_dim)
-        z_var: Variance of q(z|x) - shape (batch_size, latent_dim)
-        
+        z_mean: Mean of q(z|x), shape (batch_size, latent_dim)
+        z_var: Variance of q(z|x), shape (batch_size, latent_dim)
+
     Returns:
-        Total correlation upper bound (to be minimized)
+        Estimated total correlation upper bound (to be minimized)
     """
     batch_size, latent_dim = z_mean.shape
-    
-    # Compute q(z) by aggregating q(z|x) across the batch
-    # q(z) = 1/N * sum_i q(z|x_i)
-    
-    # First compute the mean and variance of the aggregated posterior q(z)
-    q_z_mean = z_mean.mean(dim=0)  # (latent_dim,)
-    
-    # Variance of q(z) has two components:
-    # 1. Mean of the variances (expected variance)
-    # 2. Variance of the means (variance of expectations)
-    q_z_var = z_var.mean(dim=0)  # Average variance across batch
-    q_z_var += ((z_mean - q_z_mean)**2).mean(dim=0)  # Add variance of means
-    
-    # KL divergence between aggregated posterior q(z) and factorized q(z)
-    # The factorized q(z) has the same marginals as q(z) but assumes independence
-    
-    # Compute log det covariance matrix (diagonal approximation)
-    log_det_qz = torch.sum(torch.log(q_z_var + 1e-10))
-    
-    # Compute log det of factorized covariance (product of marginals)
-    log_det_qz_factorized = torch.sum(torch.log(q_z_var + 1e-10))
-    
-    # For diagonal covariance matrices, the log determinants are the same
-    # so this term is 0. The TC comes from the correlation between dimensions
-    
-    # For each data point, compute KL(q(z|x) || q(z)) - sum_j KL(q(z_j|x) || q(z_j))
-    # This measures how much information is captured in the correlations
-    
-    # KL(q(z|x_i) || q(z)) for each data point
-    kl_qzx_qz = 0.5 * torch.sum(
-        (z_mean - q_z_mean)**2 / (q_z_var + 1e-10) + 
-        z_var / (q_z_var + 1e-10) -
-        torch.log(z_var + 1e-10) + 
-        torch.log(q_z_var + 1e-10) - 1,
-        dim=1
-    )
-    
-    # Sum of KL(q(z_j|x_i) || q(z_j)) for each dimension j and data point i
-    kl_qzjx_qzj = 0.5 * torch.sum(
-        (z_mean - q_z_mean)**2 / (q_z_var + 1e-10) + 
-        z_var / (q_z_var + 1e-10) -
-        torch.log(z_var + 1e-10) + 
-        torch.log(q_z_var + 1e-10) - 1,
-        dim=1
-    )
-    
-    # The difference is an upper bound on TC
-    # When dimensions are independent, this approaches zero
-    tc_bound = torch.mean(kl_qzx_qz - kl_qzjx_qzj)
-    
-    # Add regularization to ensure positive values (due to numerical issues)
+
+    # Sample z from q(z|x) using reparameterization trick
+    eps = torch.randn_like(z_mean)
+    z_sample = z_mean + eps * torch.sqrt(z_var + 1e-8)  
+
+    # Estimate log q(z) ~ log (1/N ∑ q(z|x_i)) using log-sum-exp
+    log_qz_given_x = -0.5 * (
+        ((z_sample.unsqueeze(1) - z_mean.unsqueeze(0))**2) / (z_var.unsqueeze(0) + 1e-8)
+        + torch.log(2 * torch.pi * z_var.unsqueeze(0) + 1e-8)
+    ).sum(-1)  
+
+    log_qz = torch.logsumexp(log_qz_given_x, dim=1) - torch.log(torch.tensor(batch_size, dtype=torch.float32))
+
+    # Estimate sum_j log q(z_j)
+    log_qz_product = 0.0
+    for j in range(latent_dim):
+        zj = z_sample[:, j]  
+        mean_j = z_mean[:, j].unsqueeze(0)  
+        var_j = z_var[:, j].unsqueeze(0)    
+
+        log_qzj_given_x = -0.5 * (
+            ((zj.unsqueeze(1) - mean_j)**2) / (var_j + 1e-8)
+            + torch.log(2 * torch.pi * var_j + 1e-8)
+        )  
+
+        log_qzj = torch.logsumexp(log_qzj_given_x, dim=1) - torch.log(torch.tensor(batch_size, dtype=torch.float32))
+        log_qz_product += log_qzj  
+
+    # Total correlation: E_q(z) [log q(z) - sum_j log q(z_j)]
+    tc_bound = torch.mean(log_qz - log_qz_product)
+
+    # Optional: make TC always positive due to potential small negative values from estimation noise
     tc_bound = torch.abs(tc_bound)
-    
+
     return tc_bound
 
 
@@ -740,36 +719,44 @@ class Model1Module(BaseModuleClass):
             # Prepare batch encoding - one hot encoded batch vector
             batch_onehot = None
             if self.n_batch > 1:  # Only include batch if we have more than one batch
-                batch_onehot = torch.zeros(batch_index.size(0), self.n_batch, device=x.device)
-                batch_onehot.scatter_(1, batch_index.unsqueeze(1), 1)
+                # Ensure batch_index is the right shape - should be a 1D tensor
+                batch_index_flat = batch_index.view(-1)
+                batch_onehot = torch.zeros(batch_index_flat.size(0), self.n_batch, device=x.device)
+                batch_onehot.scatter_(1, batch_index_flat.unsqueeze(1), 1)
             
-            # Calculate the TC bound for each component separately
-            # For z_bg (background latent representation)
-            tc_z_bg = compute_tc_bound(qbg_m_all, qbg_v_all)
-            
-            # For e_tilda (treatment effect) - since this is a deterministic transformation,
-            # we use samples directly with a small fixed variance
-            # Create mean and variance for e_tilda (it's deterministic, so var is small)
+
+            # z_bg (background latent representation)
+            z_bg_mean = qbg_m_all
+            z_bg_var = qbg_v_all
+
+            # e_tilda (treatment effect) — deterministic, so assign small fixed variance
             e_tilda_mean = e_tilda
-            e_tilda_var = torch.ones_like(e_tilda) * 0.01  # Small fixed variance
-            tc_e_tilda = compute_tc_bound(e_tilda_mean, e_tilda_var)
-            
-            # For batch encoding (optional)
-            tc_batch = torch.tensor(0.0, device=x.device)
+            e_tilda_var = torch.ones_like(e_tilda) * 0.01
+
+            # Batch encoding (if present) — one-hot, so also deterministic
             if batch_onehot is not None:
-                # Batch encoding is one-hot, so each dimension is independent already
-                # but we compute it for completeness
                 batch_mean = batch_onehot
-                batch_var = torch.ones_like(batch_onehot) * 0.01  # Small fixed variance
-                tc_batch = compute_tc_bound(batch_mean, batch_var)
-            
-            # Sum up all TC components
-            tc_total = tc_z_bg + tc_e_tilda + tc_batch
-            
-            # Apply weight
+                batch_var = torch.ones_like(batch_onehot) * 0.01
+            else:
+                batch_mean = None
+                batch_var = None
+
+            # Concatenate all available components to form joint distribution
+            components_mean = [z_bg_mean, e_tilda_mean]
+            components_var = [z_bg_var, e_tilda_var]
+
+            if batch_mean is not None:
+                components_mean.append(batch_mean)
+                components_var.append(batch_var)
+
+            joint_mean = torch.cat(components_mean, dim=1)
+            joint_var = torch.cat(components_var, dim=1)
+
+            # Compute TC over the joint distribution
+            tc_total = compute_tc_bound(joint_mean, joint_var)
+
             loss_tc = self.mi_weight * tc_total
             
-            # Store the TC estimate for tracking
             if hasattr(self, 'tc_loss_tracker'):
                 self.tc_loss_tracker = tc_total.detach()
 
@@ -816,11 +803,31 @@ class Model1Module(BaseModuleClass):
         """
         outputs = super().forward(*inputs, **kwargs)
         
-        # Add total correlation estimate to the outputs when TC loss is used
-        if self.mi_weight > 0 and hasattr(self, 'tc_loss_tracker'):
-            outputs["tc_estimate"] = self.tc_loss_tracker
-        
-        return outputs
+        # Convert tuple to dictionary if needed or create a new dictionary
+        if isinstance(outputs, tuple):
+            # Create new dictionary with the original tuple elements
+            outputs_dict = {}
+            if len(outputs) >= 1:
+                outputs_dict["reconstruction"] = outputs[0]
+            if len(outputs) >= 2:
+                outputs_dict["latent"] = outputs[1]
+            if len(outputs) >= 3:
+                outputs_dict["loss"] = outputs[2]
+                
+            # Add total correlation estimate to the new dictionary when TC loss is used
+            if self.mi_weight > 0 and hasattr(self, 'tc_loss_tracker'):
+                outputs_dict["tc_estimate"] = self.tc_loss_tracker
+                
+            return outputs  # Return original tuple to maintain compatibility
+        else:
+            # If already a dictionary, add tc_estimate
+            if self.mi_weight > 0 and hasattr(self, 'tc_loss_tracker'):
+                # Create a copy to avoid modifying the original
+                if isinstance(outputs, dict):
+                    outputs_dict = {**outputs, "tc_estimate": self.tc_loss_tracker}
+                    return outputs_dict
+            
+            return outputs
     
     def get_current_tc_estimate(self):
         """
