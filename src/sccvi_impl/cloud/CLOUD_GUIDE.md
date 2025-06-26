@@ -67,11 +67,10 @@ The script performs the following steps automatically:
 
 After successful execution:
 
-- Results are saved locally in `src/results/simulated/benchmarking_results.csv`
+- Results are saved locally in `sccvi_impl/src/sccvi_impl/results/simulated/benchmarking_results.csv`
 - The CSV file contains performance metrics for both Model1 and scCausalVI:
   - L2 norm of reconstruction
-  - Covariance metrics for batch effects
+  - Covariance metrics for batch effects, background effects and treatment effects
   - Average Silhouette Width (ASW)
-  - Treatment effect metrics
 
 
