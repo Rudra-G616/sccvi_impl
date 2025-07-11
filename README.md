@@ -98,6 +98,7 @@ See `requirements.txt` for a list of dependencies.
 
 ## Useful Links
 
+- Some parts of the code are adapted from the official implementation of scCausalVI, which is licensed under the MIT License. See the LICENSE file for details.
 - The official implementation of scCausalVI can be found at the following link. - https://github.com/ShaokunAn/scCausalVI.git
 
 - Some components of this project are informed by ideas from:  
